@@ -1,3 +1,0 @@
-- Russische Übersetzung aktualisiert
-- Absturz auf dem Start Bildschirm behoben
-- Anmeldeverhalten verbessert

@@ -1,2 +1,0 @@
-- Add polish translation
-- Fix crash in some languages

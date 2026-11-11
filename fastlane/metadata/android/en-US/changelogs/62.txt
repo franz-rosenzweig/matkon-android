@@ -1,3 +1,0 @@
-- Add a full-screen image view for recipe images
-- Hide the image on the detail screen when the recipe has no image
-- Update translations

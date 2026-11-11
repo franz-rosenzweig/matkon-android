@@ -1,3 +1,0 @@
-- Add Spanish translation
-- Add Ukrainian translation
-- Fix instruction numbers

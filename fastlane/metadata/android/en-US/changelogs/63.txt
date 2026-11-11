@@ -1,5 +1,0 @@
-- Add recipe image upload and camera capture support
-- Show recipe title only once
-- Show login webview errors
-- Update category view on recipe update
-- Update translations

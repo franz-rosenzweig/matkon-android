@@ -1,14 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.NextcloudCookbook.NoActionBar" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@android:color/background_dark</item>
-        <item name="android:textColorLink">@color/nc_blue_800</item>
-    </style>
-
-    <style name="Theme.NextcloudCookbook" parent="Theme.NextcloudCookbook.NoActionBar" />
-
-    <style name="Theme.NextcloudCookbook.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenIconBackgroundColor">@color/nc_blue_800</item>
-        <item name="postSplashScreenTheme">@style/Theme.NextcloudCookbook</item>
+    <style name="Theme.Matkon" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorAccent">@color/paprika</item>
     </style>
 </resources>

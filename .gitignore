@@ -173,3 +173,7 @@ node_modules/
 
 # Claude Code (local settings and worktrees)
 .claude/
+build-log.txt
+*.apk
+keystore.properties
+/dist/

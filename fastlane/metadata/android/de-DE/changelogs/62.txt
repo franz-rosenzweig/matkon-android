@@ -1,3 +1,0 @@
-- Vollbildansicht für Rezeptbilder hinzugefügt
-- Es wird kein Platzhalterbild auf dem Detailbildschirm angezeigt, wenn das Rezept kein Bild hat
-- Übersetzungen aktualisiert

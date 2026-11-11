@@ -1,5 +1,0 @@
-- Enhance Czech translation
-- Improve time field behaviour
-- Change category icon
-- Fix uncategorized recipes list
-- Add keywords support

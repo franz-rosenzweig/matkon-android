@@ -1,1 +1,0 @@
-Visualitzar totes les receptes guardades a la seva instància del Nextcloud.

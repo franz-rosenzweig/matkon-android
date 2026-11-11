@@ -1,1 +1,0 @@
-- Absturz beim Start auf einigen Geräten behoben

@@ -1,3 +1,0 @@
-- Absturz behoben, wenn der Anzeigename nicht verfügbar ist
-- Absturz behoben, wenn der Mehrfenstermodus verwendet wird
-- Übersetzungen aktualisiert

@@ -1,3 +1,0 @@
-- Added monochrome icon
-- Improved recipe share text
-- Fixed login issue

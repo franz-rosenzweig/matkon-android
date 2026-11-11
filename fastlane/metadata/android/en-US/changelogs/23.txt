@@ -1,3 +1,0 @@
-- Update Czech translation
-- Fix landscape status bar color
-- Fix startup crash related to recipe of the day

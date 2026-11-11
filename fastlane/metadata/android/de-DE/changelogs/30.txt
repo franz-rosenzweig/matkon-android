@@ -1,2 +1,0 @@
-- Verbesserung der tschechischen Übersetzung
-- Absturz beim Start behoben

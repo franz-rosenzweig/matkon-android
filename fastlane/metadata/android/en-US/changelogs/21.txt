@@ -1,3 +1,0 @@
-- Add category to recipe views
-- Fix image URL
-- Fix persisted data after logout

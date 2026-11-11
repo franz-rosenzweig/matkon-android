@@ -1,3 +1,0 @@
-- Monochromes App-Icon hinzugefügt
-- Teilen-Text von Rezepten verbessert
-- Login-Fehler behoben

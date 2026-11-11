@@ -1,5 +1,0 @@
-- Russische Übersetzung hinzugefügt
-- Norwegische Übersetzung aktualisiert
-- Fokus der Suche korrigiert
-- Fehler in der Startanimation behoben
-- Scroll-Probleme beim Einloggen behoben

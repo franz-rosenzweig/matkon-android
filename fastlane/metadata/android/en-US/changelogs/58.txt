@@ -1,1 +1,0 @@
-- Fix login with non-admin accounts

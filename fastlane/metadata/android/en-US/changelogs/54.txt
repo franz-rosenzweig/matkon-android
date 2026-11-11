@@ -1,2 +1,0 @@
-- Fix recipe image after change
-- Update dependencies

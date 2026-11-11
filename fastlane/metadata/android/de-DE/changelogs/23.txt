@@ -1,3 +1,0 @@
-- Tschechische Übersetzung aktualisieren
-- Farbe der Statusleiste im Querformat korrigiert
-- Absturz im Zusammenhang mit dem Rezept des Tages behoben

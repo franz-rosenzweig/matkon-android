@@ -1,3 +1,0 @@
-- Disallow cleartext traffic
-- Replace Chips
-- Replace libraries screen

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="nc_blue_800">#FF0072B5</color>
-    <color name="nc_blue_700">#FF0082C9</color>
-    <color name="nc_blue_gradient_start">@color/nc_blue_700</color>
-    <color name="nc_blue_gradient_end">#FF1CAFFF</color>
+    <color name="paper">#F5F2EC</color>
+    <color name="paprika">#B8441A</color>
+    <color name="steam">#FFF6EF</color>
+    <color name="icon_bg">#B8441A</color>
 </resources>

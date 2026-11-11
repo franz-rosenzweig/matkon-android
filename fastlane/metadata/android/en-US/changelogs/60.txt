@@ -1,3 +1,0 @@
-- Add ingredient syntax indicator
-- Add option to allow self signed certificates
-- Update translations
