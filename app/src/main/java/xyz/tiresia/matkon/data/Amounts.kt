@@ -122,8 +122,15 @@ object Amounts {
             "kg" to "kg", "ml" to "ml", "l" to "l", "liter" to "l", "liters" to "l", "litre" to "l",
             "lb" to "lb", "lbs" to "lb", "pound" to "lb", "pounds" to "lb", "oz" to "oz", "ounce" to "oz", "ounces" to "oz",
             "clove" to "clove", "cloves" to "clove", "can" to "can", "cans" to "can", "כוס" to "cup", "כוסות" to "cup",
+            "head" to "head", "heads" to "head", "bunch" to "bunch", "bunches" to "bunch", "sprig" to "sprig", "sprigs" to "sprig",
+            "slice" to "slice", "slices" to "slice", "stick" to "stick", "sticks" to "stick", "piece" to "piece", "pieces" to "piece",
         )
-    private val UNIT_SHOW = mapOf("cup" to ("cup" to "cups"), "clove" to ("clove" to "cloves"), "can" to ("can" to "cans"))
+    private val UNIT_SHOW =
+        mapOf(
+            "cup" to ("cup" to "cups"), "clove" to ("clove" to "cloves"), "can" to ("can" to "cans"), "head" to ("head" to "heads"),
+            "bunch" to ("bunch" to "bunches"), "sprig" to ("sprig" to "sprigs"), "slice" to ("slice" to "slices"),
+            "stick" to ("stick" to "sticks"), "piece" to ("piece" to "pieces"),
+        )
 
     fun norm(s: String): String =
         Normalizer

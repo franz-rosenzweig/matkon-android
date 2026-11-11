@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,19 +33,31 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +79,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,11 +94,13 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.tiresia.matkon.data.Amounts
@@ -92,13 +108,19 @@ import xyz.tiresia.matkon.data.Ingredient
 import xyz.tiresia.matkon.data.Kitchen
 import xyz.tiresia.matkon.data.Local
 import xyz.tiresia.matkon.data.Memory
-import xyz.tiresia.matkon.data.Net
+import xyz.tiresia.matkon.data.Offline
 import xyz.tiresia.matkon.data.Recipe
+import xyz.tiresia.matkon.data.Refused
+import xyz.tiresia.matkon.data.SignedOut
 import xyz.tiresia.matkon.data.Step
+import xyz.tiresia.matkon.data.Units
 import xyz.tiresia.matkon.timer.Timers
 import java.time.LocalDate
 
 val FACTORS = listOf(0.5 to "½×", 1.0 to "1×", 1.5 to "1½×", 2.0 to "2×", 3.0 to "3×")
+
+/** The language picked for a recipe on this visit (else the account's own), as on the web. */
+val langChoice = mutableMapOf<String, String>()
 
 /** Loads a recipe: the phone's copy first, then the server's when it answers. */
 @Composable
@@ -147,6 +169,8 @@ fun tickKey(
     i: Int,
 ) = "$g.$i"
 
+private enum class RecipeSheet { Collections, Share, Made }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RecipeScreen(code: String) {
@@ -154,11 +178,14 @@ fun RecipeScreen(code: String) {
     val ctx = LocalContext.current
     val m by Kitchen.memory.collectAsStateWithLifecycle()
     val factors by Kitchen.factors.collectAsStateWithLifecycle()
-    var lang by remember(code) { mutableStateOf(Kitchen.langFor(code)) }
+    var lang by remember(code) { mutableStateOf(langChoice[code] ?: Kitchen.langFor(code)) }
     val r = rememberRecipe(code, lang)
     val factor = factors[code] ?: 1.0
     var playing by remember(code) { mutableStateOf(false) }
     var planning by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    var sheet by remember { mutableStateOf<RecipeSheet?>(null) }
+    var shareUrl by remember(code, r?.share) { mutableStateOf(r?.share) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     LaunchedEffect(code) { Kitchen.op("view", mapOf("code" to code)) }
@@ -167,13 +194,40 @@ fun RecipeScreen(code: String) {
         topBar = {
             Bar("", onBack = { nav.back() }) {
                 if (r != null && r.langs.orEmpty().size > 1) {
-                    TextButton(onClick = { lang = if (lang == "he") "en" else "he" }) {
+                    TextButton(onClick = {
+                        lang = if (lang == "he") "en" else "he"
+                        langChoice[code] = lang
+                    }) {
                         Text(if (lang == "he") "English" else "עברית")
                     }
                 }
                 val saved = m.saved.orEmpty().containsKey(code)
                 IconButton(onClick = { Kitchen.op("save", mapOf("code" to code, "on" to !saved)) }) {
                     Icon(if (saved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, if (saved) "Saved" else "Save", tint = if (saved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                }
+                if (r != null) {
+                    val l = labelsFor(r.lang)
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Default.MoreVert, l.more)
+                        CompositionLocalProvider(LocalLayoutDirection provides if (r.he) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            val item = @Composable { label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, go: () -> Unit ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    leadingIcon = { Icon(icon, null) },
+                                    onClick = {
+                                        menu = false
+                                        go()
+                                    },
+                                )
+                            }
+                            item(l.collections, Icons.Default.Folder) { sheet = RecipeSheet.Collections }
+                            if (r.is_recipe != false) item(l.share, Icons.Default.Link) { sheet = RecipeSheet.Share }
+                            item(l.print, Icons.Default.Print) { Printing.recipe(ctx, r, factor, m.units()) }
+                            if (r.can_edit == true) item(l.edit, Icons.Default.Edit) { nav.go(Screen.Edit(code, r.lang ?: lang)) }
+                        }
+                        }
+                    }
                 }
             }
         },
@@ -190,7 +244,7 @@ fun RecipeScreen(code: String) {
         CompositionLocalProvider(LocalLayoutDirection provides if (r.he) LayoutDirection.Rtl else LayoutDirection.Ltr) {
             BoxWithConstraints(Modifier.padding(pad).fillMaxSize()) {
                 val two = maxWidth >= 720.dp
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()) {
                     val media: @Composable (Modifier) -> Unit = { mod ->
                         Media(r, playing, onPlay = { playing = true }, modifier = mod)
                     }
@@ -223,7 +277,7 @@ fun RecipeScreen(code: String) {
                         Column(mod) { Ingredients(r, m, l, factor) }
                     }
                     val steps: @Composable (Modifier) -> Unit = { mod ->
-                        Column(mod) { Steps(r, l, onTimer = { step, min -> startTimer(r, step, min) }) }
+                        Column(mod) { Steps(r, l, m.units(), onTimer = { step, min -> startTimer(r, step, min) }) }
                     }
                     if (two) {
                         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
@@ -235,8 +289,16 @@ fun RecipeScreen(code: String) {
                         steps(Modifier.padding(horizontal = 16.dp))
                     }
                     Column(Modifier.padding(horizontal = 16.dp).widthIn(max = 760.dp)) {
-                        Extras(r, l)
-                        Mine(r, m, l)
+                        Extras(r, l, m.units())
+                        Mine(
+                            r, m, l,
+                            onMade = { sheet = RecipeSheet.Made },
+                            onAgain = { f ->
+                                Kitchen.setFactor(code, f)
+                                nav.go(Screen.Cook(code, start = 1))
+                            },
+                        )
+                        AskBox(r, l)
                         Spacer(Modifier.height(40.dp))
                     }
                 }
@@ -253,6 +315,14 @@ fun RecipeScreen(code: String) {
                     nav.go(Screen.Week)
                 }
             }
+        }
+    }
+    if (r != null) {
+        when (sheet) {
+            RecipeSheet.Collections -> CollectionsSheet(code, labelsFor(r.lang)) { sheet = null }
+            RecipeSheet.Share -> ShareLinkSheet(r, shareUrl, onUrl = { shareUrl = it }) { sheet = null }
+            RecipeSheet.Made -> MadeSheet(r, factor) { sheet = null }
+            null -> {}
         }
     }
 }
@@ -291,6 +361,53 @@ private fun Media(
     }
 }
 
+@Composable
+private fun LinkText(
+    text: String,
+    onClick: () -> Unit,
+    strong: Boolean = false,
+) {
+    Text(
+        text,
+        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = if (strong) FontWeight.Medium else null,
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
+    )
+}
+
+/** Where the recipe came from: the creator and the reel, the site and its page, or nothing for photos. */
+@Composable
+private fun SourceLine(
+    r: Recipe,
+    l: Labels,
+    onCreator: (String) -> Unit,
+) {
+    val ctx = LocalContext.current
+    val links = mutableListOf<@Composable () -> Unit>()
+    when (r.source) {
+        "photo" -> {}
+        "web" -> {
+            if (!r.user.isNullOrBlank()) links.add { LinkText(r.user, { onCreator(r.user) }, strong = true) }
+            if (!r.reel.isNullOrBlank()) links.add { LinkText(l.page, { openLink(ctx, r.reel) }) }
+        }
+        else -> {
+            if (!r.user.isNullOrBlank()) links.add { LinkText("@${r.user}", { onCreator(r.user) }, strong = true) }
+            if (!r.reel.isNullOrBlank()) links.add { LinkText(l.insta, { openLink(ctx, r.reel) }) }
+            if (!r.link.isNullOrBlank()) links.add { LinkText(l.page, { openLink(ctx, r.link) }) }
+        }
+    }
+    if (links.isEmpty()) return
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            links.forEachIndexed { i, link ->
+                if (i > 0) Text("  ·  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                link()
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Head(
@@ -303,7 +420,6 @@ private fun Head(
     onPlan: () -> Unit,
     onList: () -> Unit,
 ) {
-    val ctx = LocalContext.current
     val me by Kitchen.me.collectAsStateWithLifecycle()
     Spacer(Modifier.height(14.dp))
     Text(r.title ?: "", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
@@ -312,40 +428,24 @@ private fun Head(
         Text(r.summary, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Spacer(Modifier.height(10.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (!r.user.isNullOrBlank()) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Text(
-                    "@${r.user}",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onCreator(r.user) }.padding(vertical = 4.dp),
-                )
-            }
-            Text("  ·  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (!r.reel.isNullOrBlank()) {
-            Text(
-                l.insta,
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { openLink(ctx, r.reel) }.padding(vertical = 4.dp),
-            )
-        }
-    }
+    SourceLine(r, l, onCreator)
     val who = r.added_by?.takeIf { it != me?.account?.id }?.let { me?.names?.get(it) ?: it }
-    val dates = listOfNotNull(r.posted?.let { l.posted(day(it, r.lang)) }, r.found?.let { l.added(day(it, r.lang), who) })
+    val dates =
+        listOfNotNull(
+            r.posted?.let { l.posted(day(it, r.lang)) },
+            r.found?.let { l.added(day(it, r.lang), who) },
+            r.edited?.at?.let { l.edited(day(it, r.lang)) },
+        )
     if (dates.isNotEmpty()) {
         Text(dates.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     val facts =
         listOfNotNull(
+            r.servings?.takeIf { it.isNotBlank() }?.let { "${servesOrMakes(it, l)} $it" },
             r.time?.prep?.takeIf { it.isNotBlank() }?.let { "${l.prep} $it" },
             r.time?.cook?.takeIf { it.isNotBlank() }?.let { "${l.cook} $it" },
             r.time?.total?.takeIf { it.isNotBlank() }?.let { "${l.total} $it" },
-            r.oven?.takeIf { it.isNotBlank() }?.let { "${l.oven} $it" },
-            r.servings?.takeIf { it.isNotBlank() }?.let { "${l.serves} $it" },
+            r.oven?.takeIf { it.isNotBlank() }?.let { "${l.oven} ${Units.text(it, m.units(), r.lang)}" },
         )
     if (facts.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
@@ -387,16 +487,25 @@ private fun Head(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(l.amounts, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(10.dp))
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FACTORS.forEach { (f, name) ->
-                        FilterChip(selected = factor == f, onClick = { Kitchen.setFactor(r.code, f) }, label = { Text(name) })
-                    }
-                }
-            }
+            FactorChips(factor) { Kitchen.setFactor(r.code, it) }
         }
     }
     Spacer(Modifier.height(8.dp))
+}
+
+/** ½× to 3×, always left to right. */
+@Composable
+fun FactorChips(
+    factor: Double,
+    onPick: (Double) -> Unit,
+) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FACTORS.forEach { (f, name) ->
+                FilterChip(selected = factor == f, onClick = { onPick(f) }, label = { Text(name) })
+            }
+        }
+    }
 }
 
 @Composable
@@ -405,10 +514,12 @@ fun IngredientRow(
     done: Boolean,
     factor: Double,
     l: Labels,
+    units: String,
+    lang: String?,
     big: Boolean = false,
     onTick: () -> Unit,
 ) {
-    val amount = Amounts.scale(i.amount.orEmpty(), factor)
+    val amount = Units.amount(Amounts.scale(i.amount.orEmpty(), factor), units, lang)
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onTick).padding(vertical = if (big) 10.dp else 7.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.Top,
@@ -464,6 +575,7 @@ fun Ingredients(
 ) {
     if (r.groups.isEmpty()) return
     val ticked = m.ticks.orEmpty()[r.code].orEmpty().toSet()
+    val units = m.units()
     Text(l.ing, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
     r.groups.forEachIndexed { gi, g ->
         if (!g.name.isNullOrBlank() && (r.groups.size > 1 || g.name != r.title)) {
@@ -471,7 +583,7 @@ fun Ingredients(
         }
         g.items.orEmpty().forEachIndexed { ii, i ->
             val k = tickKey(gi, ii)
-            IngredientRow(i, k in ticked, factor, l, big) { toggleTick(r.code, m, k) }
+            IngredientRow(i, k in ticked, factor, l, units, r.lang, big) { toggleTick(r.code, m, k) }
         }
     }
 }
@@ -521,6 +633,7 @@ fun TimerChips(
 private fun Steps(
     r: Recipe,
     l: Labels,
+    units: String,
     onTimer: (Int, Int) -> Unit,
 ) {
     val steps = r.stepList
@@ -536,7 +649,7 @@ private fun Steps(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(s.text.orEmpty(), style = MaterialTheme.typography.bodyLarge)
+                Text(Units.text(s.text.orEmpty(), units, r.lang), style = MaterialTheme.typography.bodyLarge)
                 TimerChips(r, i + 1, s, l, onTimer)
             }
         }
@@ -562,8 +675,9 @@ private fun Bullets(
 private fun Extras(
     r: Recipe,
     l: Labels,
+    units: String,
 ) {
-    Bullets(l.tips, r.tips.orEmpty().filter { it.isNotBlank() })
+    Bullets(l.tips, r.tips.orEmpty().filter { it.isNotBlank() }.map { Units.text(it, units, r.lang) })
     Bullets(l.miss, r.missing.orEmpty().filter { it.isNotBlank() })
     val names = mapOf("calories" to l.calories, "protein" to l.protein, "carbs" to l.carbs, "fat" to l.fat)
     val nut = r.nutrition.orEmpty().filterValues { it != null && it.toString().isNotBlank() }
@@ -584,9 +698,47 @@ private fun Mine(
     r: Recipe,
     m: Memory,
     l: Labels,
+    onMade: () -> Unit,
+    onAgain: (Double) -> Unit,
 ) {
     Spacer(Modifier.height(22.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Spacer(Modifier.height(16.dp))
+    val log = m.cooked.orEmpty().filter { it.code == r.code }.sortedByDescending { it.at }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = onMade) {
+            Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.done)
+            Spacer(Modifier.width(8.dp))
+            Text(l.madeIt)
+        }
+        if (log.isNotEmpty()) {
+            Text(l.made(log.size, day(log.first().at, r.lang)), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    val prev = log.firstOrNull { it.factor != null && it.factor != 1.0 }
+    if (prev?.factor != null && r.stepList.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = { onAgain(prev.factor) }) {
+            Icon(Icons.Default.Replay, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(l.again2 + " · " + factorName(prev.factor))
+        }
+    }
+    log.take(8).forEach { c ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                Text(
+                    day(c.at, r.lang) + (if (c.factor != null && c.factor != 1.0) " · " + factorName(c.factor) else ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!c.note.isNullOrBlank()) Text(c.note, style = MaterialTheme.typography.bodyMedium)
+            }
+            IconButton(onClick = { Kitchen.op("uncook", mapOf("code" to r.code, "id" to c.id)) }) {
+                Icon(Icons.Default.Close, "Remove", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
     Text(l.rating, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
     val cur = m.ratings.orEmpty()[r.code] ?: 0
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -613,24 +765,243 @@ private fun Mine(
         if (note != m.notes.orEmpty()[r.code].orEmpty()) Kitchen.op("note", mapOf("code" to r.code, "text" to note))
     }
     OutlinedTextField(note, { note = it }, minLines = 3, modifier = Modifier.fillMaxWidth())
-    Spacer(Modifier.height(16.dp))
-    val made = m.cooked.orEmpty().filter { it.code == r.code }.sortedByDescending { it.at }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { Kitchen.op("cooked", mapOf("code" to r.code, "id" to Local.newId())) }) {
-            Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.done)
-            Spacer(Modifier.width(8.dp))
-            Text(l.madeIt)
-        }
-        if (made.isNotEmpty()) {
-            Spacer(Modifier.width(12.dp))
-            Text(l.made(made.size, day(made.first().at, r.lang)), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+// ---- Ask about this recipe ----
+
+data class AskItem(val id: Int, val q: String, val a: String?, val bad: Boolean = false)
+
+/** The questions asked about each recipe, kept while the app is open. A question goes on when the screen is left. */
+object Asks {
+    val threads = mutableStateMapOf<String, List<AskItem>>()
+    private val scope = MainScope()
+    private var next = 0
+
+    fun ask(
+        code: String,
+        lang: String?,
+        q: String,
+    ) {
+        val t = threads[code].orEmpty()
+        val history = t.filter { it.a != null && !it.bad }.takeLast(6).map { it.q to it.a!! }
+        val item = AskItem(next++, q, null)
+        threads[code] = t + item
+        scope.launch {
+            val (a, bad) =
+                try {
+                    Kitchen.ask(code, lang, q, history) to false
+                } catch (_: Offline) {
+                    "No connection" to true
+                } catch (_: SignedOut) {
+                    "Signed out" to true
+                } catch (e: Refused) {
+                    (e.message ?: "Something went wrong.") to true
+                } catch (e: Exception) {
+                    (e.message ?: "Something went wrong.") to true
+                }
+            threads[code] = threads[code].orEmpty().map { if (it.id == item.id) it.copy(a = a, bad = bad) else it }
         }
     }
-    made.forEach { c ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(day(c.at, r.lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            IconButton(onClick = { Kitchen.op("uncook", mapOf("code" to r.code, "id" to c.id)) }) {
-                Icon(Icons.Default.Close, "Remove", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun AskBox(
+    r: Recipe,
+    l: Labels,
+) {
+    val thread = Asks.threads[r.code].orEmpty()
+    var q by remember(r.code) { mutableStateOf("") }
+    val send = {
+        val t = q.trim()
+        if (t.isNotEmpty()) {
+            Asks.ask(r.code, r.lang, t)
+            q = ""
+        }
+    }
+    Text(l.ask, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
+    thread.forEach { x ->
+        Text(x.q, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        Text(
+            x.a ?: l.asking,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (x.bad) MaterialTheme.colorScheme.error else if (x.a == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+        )
+    }
+    OutlinedTextField(
+        q,
+        { if (it.length <= 1000) q = it },
+        placeholder = { Text(l.askPh) },
+        trailingIcon = {
+            IconButton(onClick = send, enabled = q.isNotBlank()) { Icon(Icons.AutoMirrored.Filled.Send, l.ask) }
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+        keyboardActions = KeyboardActions(onSend = { send() }),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+    )
+}
+
+// ---- the sheets from More, and I made it ----
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CollectionsSheet(
+    code: String,
+    l: Labels,
+    onDismiss: () -> Unit,
+) {
+    val m by Kitchen.memory.collectAsStateWithLifecycle()
+    var name by remember { mutableStateOf("") }
+    val add = {
+        val n = name.trim()
+        if (n.isNotEmpty()) {
+            val id = Local.newId()
+            Kitchen.op("coll-new", mapOf("id" to id, "name" to n))
+            Kitchen.op("coll-add", mapOf("id" to id, "code" to code))
+            name = ""
+        }
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().imePadding().padding(bottom = 16.dp)) {
+            Text(l.collections, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            m.collections.orEmpty().forEach { c ->
+                val on = code in c.codes.orEmpty()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { Kitchen.op(if (on) "coll-remove" else "coll-add", mapOf("id" to c.id, "code" to code)) }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.Folder, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(14.dp))
+                    Text(c.name.orEmpty(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Icon(
+                        if (on) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+                        null,
+                        tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+            OutlinedTextField(
+                name,
+                { if (it.length <= 60) name = it },
+                placeholder = { Text("New collection") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                trailingIcon = { IconButton(onClick = add, enabled = name.isNotBlank()) { Icon(Icons.Default.Add, "Add") } },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { add() }),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShareLinkSheet(
+    r: Recipe,
+    url: String?,
+    onUrl: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val l = labelsFor(r.lang)
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var copied by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val call = { on: Boolean ->
+        if (!busy) {
+            busy = true
+            error = null
+            scope.launch {
+                try {
+                    onUrl(Kitchen.share(r.code, on))
+                } catch (_: Offline) {
+                    error = "No connection"
+                } catch (e: Exception) {
+                    error = e.message
+                } finally {
+                    busy = false
+                }
+            }
+        }
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 20.dp)) {
+            Text(l.share, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 8.dp))
+            if (url == null) {
+                Button(onClick = { call(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                    Icon(Icons.Default.Link, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Make a link")
+                }
+            } else {
+                OutlinedTextField(url, {}, readOnly = true, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                FlowRowButtons {
+                    Button(onClick = {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url).putExtra(Intent.EXTRA_SUBJECT, r.title)
+                        ctx.startActivity(Intent.createChooser(send, null))
+                    }) { Text("Share") }
+                    OutlinedButton(onClick = {
+                        val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText(r.title ?: "Matkon", url))
+                        copied = true
+                    }) { Text(if (copied) "Copied" else "Copy") }
+                    TextButton(onClick = { call(false) }, enabled = !busy) { Text("Stop sharing") }
+                }
+            }
+            error?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRowButtons(content: @Composable () -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+}
+
+/** "I made it": the amounts used and a note, for the cooking log. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MadeSheet(
+    r: Recipe,
+    factor: Double,
+    onDismiss: () -> Unit,
+) {
+    val l = labelsFor(r.lang)
+    var f by remember { mutableStateOf(factor) }
+    var note by remember { mutableStateOf("") }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        CompositionLocalProvider(LocalLayoutDirection provides if (r.he) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+            Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding().imePadding().padding(bottom = 20.dp)) {
+                Text(l.madeIt, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 8.dp))
+                if (r.groups.isNotEmpty()) {
+                    Text(l.amounts, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+                    FactorChips(f) { f = it }
+                }
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(note, { if (it.length <= 500) note = it }, label = { Text(l.noteLbl) }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        Kitchen.op("cooked", mapOf("code" to r.code, "id" to Local.newId(), "factor" to f, "note" to note.trim()))
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                ) {
+                    Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(l.madeIt)
+                }
             }
         }
     }
@@ -640,12 +1011,13 @@ private fun Mine(
 @Composable
 fun PlanSheet(
     onDismiss: () -> Unit,
+    title: String = "Plan",
     onPick: (LocalDate) -> Unit,
 ) {
     val today = LocalDate.now()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-            Text("Plan", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             (0L until 14L).map { today.plusDays(it) }.forEach { d ->
                 Row(
                     Modifier.fillMaxWidth().clickable { onPick(d) }.padding(horizontal = 20.dp, vertical = 14.dp),

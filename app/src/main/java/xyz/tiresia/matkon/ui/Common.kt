@@ -44,7 +44,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.tiresia.matkon.data.IndexEntry
+import xyz.tiresia.matkon.data.Kitchen
 import xyz.tiresia.matkon.data.Memory
 import xyz.tiresia.matkon.data.Net
 import xyz.tiresia.matkon.timer.RunningTimer
@@ -64,6 +66,34 @@ fun shownTitle(
     e: IndexEntry,
     m: Memory,
 ) = (if (m.english() && e.title_en != null) e.title_en else e.title) ?: e.code
+
+/** Under a card: @creator for a reel, the site for a recipe page, who added it for photos. */
+fun byline(
+    e: IndexEntry,
+    names: Map<String, String>?,
+): String =
+    when (e.source) {
+        "photo" -> e.added_by?.let { names?.get(it) ?: it }.orEmpty()
+        "web" -> e.user.orEmpty()
+        else -> e.user?.takeIf { it.isNotBlank() }?.let { "@$it" }.orEmpty()
+    }
+
+/** "With Alex": the accounts this one shares the week and the list with. */
+@Composable
+fun WithLine(
+    m: Memory,
+    modifier: Modifier = Modifier,
+) {
+    val h = m.household.orEmpty()
+    if (h.isEmpty()) return
+    val me by Kitchen.me.collectAsStateWithLifecycle()
+    Text(
+        "With " + h.joinToString(", ") { me?.names?.get(it) ?: it },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
 
 @Composable
 fun Photo(
@@ -142,7 +172,8 @@ fun RecipeCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val by = under ?: e.user?.let { "@$it" }
+                val me by Kitchen.me.collectAsStateWithLifecycle()
+                val by = under ?: byline(e, me?.names)
                 if (!by.isNullOrBlank()) {
                     Text(
                         by,

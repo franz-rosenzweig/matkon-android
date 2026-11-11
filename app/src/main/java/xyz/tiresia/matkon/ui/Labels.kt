@@ -48,6 +48,32 @@ data class Labels(
     val protein: String,
     val carbs: String,
     val fat: String,
+    val makes: String,
+    val page: String,
+    val more: String,
+    val edit: String,
+    val print: String,
+    val share: String,
+    val collections: String,
+    val ask: String,
+    val askPh: String,
+    val asking: String,
+    val again2: String,
+    val edited: (String) -> String,
+    val noteLbl: String,
+    val title: String,
+    val summary: String,
+    val servings: String,
+    val group: String,
+    val amount: String,
+    val item: String,
+    val note: String,
+    val addIng: String,
+    val addGroup: String,
+    val addStep: String,
+    val save: String,
+    val cancel: String,
+    val revert: String,
 )
 
 val EN =
@@ -61,7 +87,12 @@ val EN =
         posted = { "Posted $it" }, added = { d, who -> "Added $d" + (if (who != null) " by $who" else "") }, insta = "Instagram",
         amounts = "Amounts", plan = "Plan", list = "Add to list", onList = "On the list", watch = "Watch the reel",
         ingredients = "Ingredients", again = "Start again", toRecipe = "Back to the recipe",
-        calories = "Calories", protein = "Protein", carbs = "Carbs", fat = "Fat",
+        calories = "Calories", protein = "Protein", carbs = "Carbs", fat = "Fat", makes = "Makes",
+        page = "Recipe page", more = "More", edit = "Fix this recipe", print = "Print", share = "Share a link", collections = "Collections",
+        ask = "Ask", askPh = "Ask about this recipe", asking = "…", again2 = "Again, like last time", edited = { "Edited $it" },
+        noteLbl = "Note", title = "Title", summary = "Summary", servings = "Serves", group = "Group", amount = "Amount",
+        item = "Ingredient", note = "Note", addIng = "Ingredient", addGroup = "Group", addStep = "Step", save = "Save",
+        cancel = "Cancel", revert = "Undo my changes",
     )
 
 val HE =
@@ -75,10 +106,24 @@ val HE =
         posted = { "פורסם $it" }, added = { d, who -> "נוסף $d" + (if (who != null) " על ידי $who" else "") }, insta = "אינסטגרם",
         amounts = "כמויות", plan = "לתכנן", list = "לרשימת הקניות", onList = "ברשימה", watch = "לצפייה בסרטון",
         ingredients = "מצרכים", again = "מההתחלה", toRecipe = "חזרה למתכון",
-        calories = "קלוריות", protein = "חלבון", carbs = "פחמימות", fat = "שומן",
+        calories = "קלוריות", protein = "חלבון", carbs = "פחמימות", fat = "שומן", makes = "כמות",
+        page = "דף המתכון", more = "עוד", edit = "תיקון המתכון", print = "הדפסה", share = "קישור לשיתוף", collections = "אוספים",
+        ask = "שאלה", askPh = "שאלה על המתכון", asking = "…", again2 = "שוב, כמו בפעם הקודמת", edited = { "נערך $it" },
+        noteLbl = "הערה", title = "שם", summary = "תקציר", servings = "מנות", group = "קבוצה", amount = "כמות",
+        item = "מצרך", note = "הערה", addIng = "מצרך", addGroup = "קבוצה", addStep = "שלב", save = "שמירה",
+        cancel = "ביטול", revert = "ביטול השינויים שלי",
     )
 
 fun labelsFor(lang: String?) = if (lang == "he") HE else EN
+
+/** "Serves 4" for people, "Makes 16 cookies" for things, as the web decides it. */
+fun servesOrMakes(
+    servings: String,
+    l: Labels,
+) = if (Regex("""^\d+([–-]\d+)?( |$)(as\b|people|servings?\b|$)""").containsMatchIn(servings.trim())) l.serves else l.makes
+
+/** The amounts picked, as a name: ½×, 2×. */
+fun factorName(f: Double) = FACTORS.firstOrNull { it.first == f }?.second ?: ((if (f == Math.floor(f)) f.toLong().toString() else f.toString()) + "×")
 
 /** "Nov 4", or "Nov 4, 2025" in another year; Hebrew months for Hebrew recipes. */
 fun day(

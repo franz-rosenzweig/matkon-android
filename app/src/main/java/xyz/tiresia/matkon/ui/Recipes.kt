@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -24,8 +26,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -49,10 +54,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import xyz.tiresia.matkon.data.Amounts
+import xyz.tiresia.matkon.data.Coll
 import xyz.tiresia.matkon.data.IndexEntry
 import xyz.tiresia.matkon.data.Kitchen
 import xyz.tiresia.matkon.data.Memory
+import xyz.tiresia.matkon.data.Search
 
 enum class Sort(val label: String) { Added("Added"), Posted("Posted"), AZ("A–Z"), Rating("Rating"), Made("Made") }
 
@@ -61,18 +67,15 @@ private var query by mutableStateOf("")
 private var kind by mutableStateOf("All")
 private var sortBy by mutableStateOf(Sort.Added)
 
-fun haystack(e: IndexEntry) =
-    Amounts.norm(
-        listOfNotNull(e.title, e.title_en, e.user, e.kind, e.cuisine, e.summary).joinToString(" ") + " " +
-            (e.items.orEmpty() + e.items_en.orEmpty() + e.tags.orEmpty()).joinToString(" "),
-    )
-
 fun visible(
     all: List<IndexEntry>,
     m: Memory,
     creator: String?,
+    names: Map<String, String>?,
 ): List<IndexEntry> {
-    val words = Amounts.norm(query).split(' ').filter { it.isNotEmpty() }
+    val words = Search.words(query)
+    val hays = Search.hays(all, names)
+    val coll = if (kind.startsWith("c:")) m.collections.orEmpty().firstOrNull { it.id == kind.substring(2) }?.codes.orEmpty().toSet() else null
     return all
         .asSequence()
         .filter { it.is_recipe != false }
@@ -82,9 +85,9 @@ fun visible(
                 "All" -> true
                 "Saved" -> m.saved.orEmpty().containsKey(it.code)
                 "Made" -> (m.cooked_count.orEmpty()[it.code] ?: 0) > 0
-                else -> it.kind == kind
+                else -> if (coll != null) it.code in coll else it.kind == kind
             }
-        }.filter { e -> words.isEmpty() || haystack(e).let { h -> words.all { h.contains(it) } } }
+        }.filter { e -> Search.matches(hays[e.code], words) }
         .sortedWith(
             when (sortBy) {
                 Sort.Added -> compareByDescending { it.found ?: 0.0 }
@@ -102,9 +105,15 @@ fun RecipesScreen() {
     val nav = LocalNav.current
     val all by Kitchen.recipes.collectAsStateWithLifecycle()
     val m by Kitchen.memory.collectAsStateWithLifecycle()
+    val me by Kitchen.me.collectAsStateWithLifecycle()
     var sheet by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<Coll?>(null) }
+    var deleting by remember { mutableStateOf<Coll?>(null) }
     val creator = nav.creator
-    val shown = visible(all, m, creator)
+    val colls = m.collections.orEmpty()
+    val picked = if (kind.startsWith("c:")) colls.firstOrNull { it.id == kind.substring(2) } else null
+    LaunchedEffect(picked, kind) { if (kind.startsWith("c:") && picked == null) kind = "All" }
+    val shown = visible(all, m, creator, me?.names)
     val kinds =
         all
             .filter { it.is_recipe != false && !it.kind.isNullOrBlank() }
@@ -156,6 +165,23 @@ fun RecipesScreen() {
                 items(listOf("All", "Saved", "Made") + kinds) { k ->
                     FilterChip(selected = kind == k, onClick = { kind = k }, label = { Text(k) })
                 }
+                items(colls, key = { "c:" + it.id }) { c ->
+                    FilterChip(
+                        selected = kind == "c:" + c.id,
+                        onClick = { kind = if (kind == "c:" + c.id) "All" else "c:" + c.id },
+                        label = { Text(c.name.orEmpty()) },
+                        leadingIcon = { Icon(Icons.Default.Folder, null, Modifier.size(18.dp)) },
+                    )
+                }
+            }
+            if (picked != null) {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Folder, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(picked.name.orEmpty(), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { renaming = picked }) { Text("Rename") }
+                    IconButton(onClick = { deleting = picked }) { Icon(Icons.Default.Delete, "Delete") }
+                }
             }
             LazyVerticalGrid(
                 state = grid,
@@ -180,6 +206,36 @@ fun RecipesScreen() {
                 }
             }
         }
+    }
+
+    renaming?.let { c ->
+        var name by remember(c.id) { mutableStateOf(c.name.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Rename") },
+            text = { OutlinedTextField(name, { if (it.length <= 60) name = it }, singleLine = true, label = { Text("Name") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (name.isNotBlank()) Kitchen.op("coll-rename", mapOf("id" to c.id, "name" to name.trim()))
+                    renaming = null
+                }, enabled = name.isNotBlank()) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } },
+        )
+    }
+    deleting?.let { c ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Delete \u201c${c.name.orEmpty()}\u201d?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    kind = "All"
+                    Kitchen.op("coll-delete", mapOf("id" to c.id))
+                    deleting = null
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+        )
     }
 
     if (sheet) {

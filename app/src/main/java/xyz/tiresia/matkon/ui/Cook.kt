@@ -65,6 +65,7 @@ import xyz.tiresia.matkon.data.Kitchen
 import xyz.tiresia.matkon.data.Local
 import xyz.tiresia.matkon.data.Recipe
 import xyz.tiresia.matkon.data.Step
+import xyz.tiresia.matkon.data.Units
 import xyz.tiresia.matkon.timer.Timers
 
 private fun stem(w: String) = w.replace(Regex("(es|s)$", RegexOption.IGNORE_CASE), "")
@@ -106,7 +107,10 @@ private fun KeepScreenOn() {
 
 @OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.FlowPreview::class)
 @Composable
-fun CookScreen(code: String) {
+fun CookScreen(
+    code: String,
+    start: Int? = null,
+) {
     val nav = LocalNav.current
     val m by Kitchen.memory.collectAsStateWithLifecycle()
     val factors by Kitchen.factors.collectAsStateWithLifecycle()
@@ -122,7 +126,7 @@ fun CookScreen(code: String) {
     val l = labelsFor(r.lang)
     val factor = factors[code] ?: 1.0
     val steps = r.stepList
-    val startAt = remember(code) { ((m.steps.orEmpty()[code] ?: 1) - 1).coerceIn(0, steps.size) }
+    val startAt = remember(code) { ((start ?: m.steps.orEmpty()[code] ?: 1) - 1).coerceIn(0, steps.size) }
     val pager = rememberPagerState(initialPage = startAt) { steps.size + 1 }
     val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf(false) }
@@ -169,10 +173,10 @@ fun CookScreen(code: String) {
                     }
                     HorizontalPager(state = pager, modifier = Modifier.weight(0.62f).fillMaxSize()) { page ->
                         if (page < steps.size) {
-                            StepPage(r, page, steps[page], l, factor, onTimer = { step, min -> startTimer(r, step, min) })
+                            StepPage(r, page, steps[page], l, factor, m.units(), onTimer = { step, min -> startTimer(r, step, min) })
                         } else {
                             DonePage(r, l, onMade = {
-                                Kitchen.op("cooked", mapOf("code" to code, "id" to Local.newId()))
+                                Kitchen.op("cooked", mapOf("code" to code, "id" to Local.newId(), "factor" to factor))
                                 nav.back()
                             }, onAgain = { scope.launch { pager.animateScrollToPage(0) } }, onRecipe = { nav.back() })
                         }
@@ -214,6 +218,7 @@ private fun StepPage(
     s: Step,
     l: Labels,
     factor: Double,
+    units: String,
     onTimer: (Int, Int) -> Unit,
 ) {
     val uses = remember(r, page) { usesOf(r, s) }
@@ -221,14 +226,14 @@ private fun StepPage(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
     ) {
         Column(Modifier.widthIn(max = 720.dp)) {
-            Text(s.text.orEmpty(), fontSize = if (wide()) 30.sp else 25.sp, lineHeight = if (wide()) 42.sp else 35.sp)
+            Text(Units.text(s.text.orEmpty(), units, r.lang), fontSize = if (wide()) 30.sp else 25.sp, lineHeight = if (wide()) 42.sp else 35.sp)
             TimerChips(r, page + 1, s, l, onTimer)
             if (uses.isNotEmpty()) {
                 Spacer(Modifier.height(24.dp))
                 Text(l.uses, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
                 uses.forEach { i ->
-                    Text(amountAnd(Amounts.scale(i.amount.orEmpty(), factor), i.item.orEmpty()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, modifier = Modifier.padding(vertical = 4.dp))
+                    Text(amountAnd(Units.amount(Amounts.scale(i.amount.orEmpty(), factor), units, r.lang), i.item.orEmpty()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, modifier = Modifier.padding(vertical = 4.dp))
                 }
             }
         }

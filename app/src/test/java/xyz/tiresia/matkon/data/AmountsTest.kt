@@ -45,6 +45,8 @@ class AmountsTest {
         assertEquals("2 tbsp + 1 tsp", Amounts.total(listOf("2 tbsp", "1 tsp")))
         assertEquals("5", Amounts.total(listOf("2", "3")))
         assertEquals("2 cups + 1 can (14 oz)", Amounts.total(listOf("1 can (14 oz)", "2 cups")))
+        assertEquals("6 heads", Amounts.total(listOf("2 heads", "4 heads")))
+        assertEquals("1½ bunches", Amounts.total(listOf("1 bunch", "1/2 bunch")))
     }
 
     @Test fun sameThing() {

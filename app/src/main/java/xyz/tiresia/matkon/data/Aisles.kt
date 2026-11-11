@@ -1,0 +1,175 @@
+package xyz.tiresia.matkon.data
+
+import java.text.Normalizer
+
+/** Which aisle a shopping-list item is in, by its words (English and Hebrew): Aisles.of("cherry tomatoes") is
+ * "produce". The longest phrase that matches wins, so "black pepper" is a spice and "bell pepper" is produce. A
+ * person's own choice for an item (memory.aisles) comes first, on the list screen. The same table as the web app. */
+object Aisles {
+    val ORDER = listOf("produce", "bakery", "meat", "dairy", "frozen", "pantry", "spices", "drinks", "household", "other")
+    val NAMES =
+        mapOf(
+            "produce" to "Produce", "bakery" to "Bakery", "meat" to "Meat and fish", "dairy" to "Dairy and eggs", "frozen" to "Frozen",
+            "pantry" to "Pantry", "spices" to "Spices", "drinks" to "Drinks", "household" to "Household", "other" to "Other",
+        )
+
+    private val WORDS =
+        linkedMapOf(
+            "produce" to (
+                "apple banana lemon lime orange grapefruit tomato tomatoes onion onions garlic ginger potato potatoes carrot " +
+                "carrots celery cucumber cucumbers bell pepper peppers chili chilli chilies jalapeno jalapeño serrano lettuce " +
+                "romaine spinach kale arugula rocket cabbage broccoli cauliflower zucchini courgette eggplant aubergine " +
+                "mushroom mushrooms avocado corn peas green beans parsley cilantro fresh coriander dill mint basil rosemary " +
+                "fresh thyme scallion scallions spring onion spring onions green onion leek shallot shallots beet beets radish " +
+                "radishes squash pumpkin berries strawberries strawberry blueberries raspberries grapes mango pineapple " +
+                "pomegranate fig figs peach pear watermelon melon cherry tomatoes chives fennel asparagus bok choy sprouts " +
+                "microgreens herbs lemongrass kohlrabi artichoke okra sweet potato yam עגבניה עגבניות עגבניות שרי בצל בצלים " +
+                "שום ג׳ינג׳ר ג'ינג'ר תפוח אדמה תפוחי אדמה תפו״א גזר סלרי מלפפון מלפפונים פלפל פלפלים גמבה צ׳ילי צ'ילי חסה תרד " +
+                "קייל כרוב ברוקולי כרובית קישוא קישואים חציל חצילים פטריות פטריה אבוקדו תירס אפונה שעועית ירוקה פטרוזיליה " +
+                "כוסברה שמיר נענע בזיליקום רוזמרין טימין טרי בצל ירוק כרישה שאלוט סלק צנון דלעת לימון ליים תפוז תפוח תפוחים " +
+                "בננה בטטה רימון מנגו אננס תאנים ענבים תותים פירות יער אוכמניות אגס אפרסק אבטיח מלון עירית שומר אספרגוס עשבי " +
+                "תיבול"
+            ),
+            "bakery" to (
+                "bread pita pitas baguette bun buns rolls tortilla tortillas wrap wraps croissant croissants bagel bagels " +
+                "challah lafa sourdough brioche flatbread naan english muffins לחם פיתה פיתות לאפה חלה בגט טורטיה טורטיות " +
+                "לחמניה לחמניות בייגל קרואסון"
+            ),
+            "meat" to (
+                "chicken chicken breast chicken thighs beef ground beef lamb ground lamb pork turkey ground meat mince minced " +
+                "meat steak sausage sausages bacon salmon fish shrimp prawns sardines cod tilapia sea bass trout anchovies " +
+                "tuna steak brisket ribs veal duck kebab meatballs עוף חזה עוף חזה פרגית פרגיות שוקיים כרעיים בשר בשר טחון " +
+                "טחון כבש הודו נקניק נקניקיות סלמון דג דגים שרימפס סרדינים אנטריקוט בריסקט צלעות קבב כבד אמנון דניס לברק"
+            ),
+            "dairy" to (
+                "milk butter cheese cream heavy cream whipping cream sour cream cream cheese yogurt yoghurt greek yogurt " +
+                "labneh feta mozzarella burrata parmesan parmigiano pecorino ricotta cheddar gruyere halloumi goat cheese " +
+                "cottage cheese buttermilk ghee mascarpone egg eggs egg yolks egg whites חלב חמאה גבינה גבינות שמנת שמנת מתוקה " +
+                "שמנת חמוצה גבינת שמנת יוגורט לבנה פטה בולגרית מוצרלה פרמזן ריקוטה צ׳דר חלומי גבינת עיזים קוטג׳ קוטג' מסקרפונה " +
+                "ביצה ביצים חלמונים חלבונים"
+            ),
+            "frozen" to (
+                "frozen ice cream puff pastry frozen peas frozen spinach phyllo filo קפוא קפואה קפואים גלידה בצק עלים בצק פילו"
+            ),
+            "pantry" to (
+                "flour all-purpose flour bread flour sugar brown sugar powdered sugar icing sugar rice basmati pasta spaghetti " +
+                "penne noodles ramen noodles oil olive oil vegetable oil canola oil sesame oil vinegar balsamic soy sauce " +
+                "tamari honey maple syrup date syrup silan tahini tomato paste canned tomatoes crushed tomatoes tomato sauce " +
+                "passata beans chickpeas lentils stock broth bouillon chicken stock vegetable stock chicken broth vegetable " +
+                "broth beef stock beef broth fish stock miso peanut butter jam chocolate chocolate chips cocoa baking powder " +
+                "baking soda yeast oats breadcrumbs panko nuts almonds walnuts pecans pistachios cashews pine nuts raisins " +
+                "dates sesame seeds sesame mustard ketchup mayonnaise mayo sriracha harissa hot sauce couscous bulgur quinoa " +
+                "semolina cornstarch corn starch gelatin coconut milk coconut cream coconut canned tuna capers olives pickles " +
+                "fish sauce oyster sauce hoisin gochujang vanilla extract matzah crackers cereal granola קמח קמח לבן סוכר סוכר " +
+                "חום אבקת סוכר אורז פסטה ספגטי אטריות שמן שמן זית שמן קנולה שמן שומשום חומץ בלסמי רוטב סויה סויה דבש סילאן " +
+                "סירופ מייפל טחינה רסק עגבניות רסק עגבניות מרוסקות שימורים שעועית חומוס גרגרי חומוס עדשים ציר אבקת מרק מיסו " +
+                "חמאת בוטנים ריבה שוקולד שוקולד צ׳יפס קקאו אבקת אפייה סודה לשתייה שמרים שיבולת שועל פירורי לחם פנקו אגוזים " +
+                "שקדים אגוזי מלך פקאן פיסטוק קשיו צנוברים צימוקים תמרים שומשום חרדל קטשופ מיונז הריסה סחוג קוסקוס בורגול " +
+                "קינואה סולת קורנפלור ג׳לטין חלב קוקוס קרם קוקוס טונה זיתים ירקות כבושים מצה מצות קרקרים"
+            ),
+            "spices" to (
+                "salt and pepper salt kosher salt sea salt black pepper pepper flakes red pepper flakes chili flakes paprika " +
+                "smoked paprika sweet paprika cumin turmeric cinnamon nutmeg cardamom allspice baharat za'atar zaatar sumac " +
+                "dried oregano oregano chili powder cayenne curry powder garam masala bay leaf bay leaves ground coriander " +
+                "coriander seeds cloves ground ginger garlic powder onion powder saffron dried thyme thyme fennel seeds " +
+                "mustard seeds seasoning everything bagel seasoning hawaij ras el hanout five spice star anise מלח מלח גס פלפל " +
+                "שחור פפריקה פפריקה מעושנת פפריקה מתוקה כמון כורכום קינמון אגוז מוסקט הל פלפל אנגלי בהרט זעתר סומק אורגנו " +
+                "צ׳ילי גרוס צ'ילי גרוס פלפל חריף גרוס קארי עלי דפנה כוסברה טחונה ציפורן שום גבישי אבקת שום אבקת בצל זעפרן " +
+                "חוואייג׳ ראס אל חנות תבלין תבלינים"
+            ),
+            "drinks" to (
+                "wine white wine red wine beer juice orange juice coffee espresso tea soda sparkling water club soda יין יין " +
+                "לבן יין אדום בירה מיץ מיץ תפוזים קפה אספרסו תה סודה מים מוגזים"
+            ),
+            "household" to (
+                "foil aluminum foil parchment parchment paper baking paper paper towels napkins toothpicks skewers plastic " +
+                "wrap zip bags נייר אפייה נייר כסף מגבות נייר מפיות קיסמים שיפודים ניילון נצמד שקיות"
+            ),
+        )
+
+    // joining neighbours in a list makes false phrases ("sugar rice"): a phrase of two or more words counts
+    // only when it's one of these
+    private val KNOWN =
+        listOf(
+            "bell pepper", "green beans", "fresh coriander", "fresh thyme", "spring onion", "spring onions", "green onion",
+            "cherry tomatoes", "bok choy", "sweet potato", "chicken breast", "chicken thighs", "ground beef", "ground lamb",
+            "ground meat", "minced meat", "sea bass", "tuna steak", "heavy cream", "whipping cream", "sour cream",
+            "cream cheese", "greek yogurt", "goat cheese", "cottage cheese", "egg yolks", "egg whites", "ice cream",
+            "puff pastry", "frozen peas", "frozen spinach", "all-purpose flour", "bread flour", "brown sugar", "powdered sugar",
+            "icing sugar", "ramen noodles", "olive oil", "vegetable oil", "canola oil", "sesame oil", "soy sauce", "maple syrup",
+            "date syrup", "tomato paste", "canned tomatoes", "crushed tomatoes", "tomato sauce", "peanut butter",
+            "chocolate chips", "baking powder", "baking soda", "pine nuts", "sesame seeds", "hot sauce", "corn starch",
+            "coconut milk", "coconut cream", "canned tuna", "fish sauce", "oyster sauce", "vanilla extract", "kosher salt",
+            "sea salt", "black pepper", "pepper flakes", "red pepper flakes", "chili flakes", "smoked paprika", "sweet paprika",
+            "dried oregano", "chili powder", "curry powder", "garam masala", "bay leaf", "bay leaves", "ground coriander",
+            "coriander seeds", "ground ginger", "garlic powder", "onion powder", "dried thyme", "fennel seeds", "mustard seeds",
+            "everything bagel seasoning", "ras el hanout", "salt and pepper", "chicken stock", "vegetable stock",
+            "chicken broth", "vegetable broth", "beef stock", "beef broth", "fish stock", "five spice", "star anise",
+            "white wine", "red wine", "orange juice", "sparkling water", "club soda", "aluminum foil", "parchment paper",
+            "baking paper", "paper towels", "plastic wrap", "zip bags", "english muffins", "lemon grass", "עגבניות שרי",
+            "תפוח אדמה", "תפוחי אדמה", "שעועית ירוקה", "בצל ירוק", "עשבי תיבול", "פירות יער", "חזה עוף", "בשר טחון",
+            "שמנת מתוקה", "שמנת חמוצה", "גבינת שמנת", "גבינת עיזים", "בצק עלים", "בצק פילו", "קמח לבן", "סוכר חום", "אבקת סוכר",
+            "שמן זית", "שמן קנולה", "שמן שומשום", "רוטב סויה", "סירופ מייפל", "רסק עגבניות", "עגבניות מרוסקות", "גרגרי חומוס",
+            "אבקת מרק", "חמאת בוטנים", "שוקולד ציפס", "אבקת אפייה", "סודה לשתייה", "שיבולת שועל", "פירורי לחם", "אגוזי מלך",
+            "חלב קוקוס", "קרם קוקוס", "ירקות כבושים", "מלח גס", "פלפל שחור", "פפריקה מעושנת", "פפריקה מתוקה", "אגוז מוסקט",
+            "פלפל אנגלי", "צילי גרוס", "פלפל חריף גרוס", "עלי דפנה", "כוסברה טחונה", "שום גבישי", "אבקת שום", "אבקת בצל",
+            "ראס אל חנות", "יין לבן", "יין אדום", "מיץ תפוזים", "מים מוגזים", "נייר אפייה", "נייר כסף", "מגבות נייר",
+            "ניילון נצמד",
+        )
+
+    // words that only describe ("white", "fresh", "ground") never decide an aisle on their own
+    private val STOP =
+        (
+            "white red green fresh ground baby dried sweet smoked sea black brown powdered icing all-purpose kosher canned " +
+            "crushed hot heavy whipping sour greek goat cottage extract paper bags zip plastic aluminum club sparkling " +
+            "five star ras el hanout english spring bay grass seeds powder flakes leaf leaves pepper everything vegetable " +
+            "bread-flour lemon-grass minced chicken-breast בצק אבקת שמן גבינת עלי מלח-גס"
+        ).split(' ').toSet()
+
+    fun norm(s: String?): String =
+        Normalizer
+            .normalize((s ?: "").lowercase(), Normalizer.Form.NFKD)
+            .replace(Regex("""\p{M}+"""), "")
+            .replace(Regex("""['׳״"]"""), "")
+            .replace(Regex("""[^\p{L}\p{N} -]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
+    /** Every phrase of one to three words in each list, longest first ("black pepper" before "pepper"); a phrase of
+     * two or more words only when it's a real one (KNOWN), a single word only when it says what the thing is. */
+    val TABLE: List<Pair<String, String>> by lazy {
+        val phrases = mutableListOf<Pair<String, String>>()
+        for ((aisle, words) in WORDS) {
+            val ws = words.split(" ")
+            val seen = HashSet<String>()
+            for (n in 3 downTo 1) {
+                for (i in 0..ws.size - n) {
+                    val p = norm(ws.subList(i, i + n).joinToString(" "))
+                    if (seen.add(p)) phrases.add(p to aisle)
+                }
+            }
+        }
+        val real = KNOWN.map { norm(it) }.toSet()
+        phrases.filter { (p) -> (!p.contains(' ') && p !in STOP) || p in real }.sortedByDescending { it.first.length }
+    }
+
+    private val HEB = Regex("[֐-׿]")
+    private val prefixed = HashMap<String, Regex>()
+
+    private fun hebrew(p: String) = synchronized(prefixed) { prefixed.getOrPut(p) { Regex("[ ][והבלמשכ]{0,2}" + Regex.escape(p) + "(?=[ ])") } }
+
+    // Hebrew words take a prefix (ה, ו, ב, ל, מ, ש, כ); English ones may end in s or es
+    fun of(item: String?): String {
+        val s = " " + norm(item) + " "
+        for ((p, aisle) in TABLE) {
+            val hit =
+                if (HEB.containsMatchIn(p)) {
+                    hebrew(p).containsMatchIn(s)
+                } else {
+                    s.contains(" $p ") || s.contains(" ${p}s ") || s.contains(" ${p}es ")
+                }
+            if (hit) return aisle
+        }
+        return "other"
+    }
+}

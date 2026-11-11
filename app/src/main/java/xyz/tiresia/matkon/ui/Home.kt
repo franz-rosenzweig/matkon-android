@@ -3,6 +3,8 @@ package xyz.tiresia.matkon.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -14,12 +16,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -90,7 +96,8 @@ fun HomeScreen() {
         topBar = {
             Bar("Matkon") {
                 if (offline) Icon(Icons.Default.CloudOff, "Offline", Modifier.padding(horizontal = 8.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                IconButton(onClick = { Kitchen.shared.value = "" }) { Icon(Icons.Default.Add, "Add a reel") }
+                IconButton(onClick = { nav.go(Screen.History) }) { Icon(Icons.Default.History, "History") }
+                IconButton(onClick = { Kitchen.shared.value = "" }) { Icon(Icons.Default.Add, "Add") }
                 if (!wide) IconButton(onClick = { nav.go(Screen.Settings) }) { Icon(Icons.Default.Settings, "Settings") }
             }
         },
@@ -103,6 +110,20 @@ fun HomeScreen() {
             modifier = Modifier.padding(pad).fillMaxSize(),
         ) {
             LazyColumn(state = list, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+                item(key = "acts") {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { Kitchen.surprise()?.let { nav.go(Screen.Recipe(it)) } }) {
+                            Icon(Icons.Default.Casino, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Surprise me")
+                        }
+                        OutlinedButton(onClick = { nav.go(Screen.Pantry) }) {
+                            Icon(Icons.Default.ShoppingBasket, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("What can I make?")
+                        }
+                    }
+                }
                 if (waiting > 0) {
                     item {
                         Text(

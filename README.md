@@ -23,10 +23,16 @@ Then there are the things I wanted from an app in the kitchen:
 - **Cook mode.** One step at a time, in big type, and the screen stays on. Swipe or tap Next. Each step shows the ingredients it uses with their amounts, so I'm not scrolling back up with flour on my hands. On a tablet on its side, the ingredient list sits next to the steps.
 - **Step timers.** When a step says "bake 25 minutes," there's a button for it. The timer rings like an alarm clock even if the phone is asleep or I've gone to another app.
 - **Amounts.** Half, one and a half, double, triple. The amounts are worked out from what the reel gives, and anything without a number ("salt to taste") stays as it is.
-- **The week.** I put recipes on days, this week and next, and the whole week can go onto the shopping list at once.
-- **The shopping list.** Ingredients from different recipes are added together where they can be ("1 cup" and "½ cup" of the same thing become "1½ cups"), and I tick things off in the store. It's the same list on every device signed in to the same Matkon account, so whoever's at the store sees it.
-- **Made it, ratings and notes.** The same memory the web app keeps: what I've made and when, a rating out of ten, and a note for next time.
-- **Share a reel straight in.** From Instagram, Share → Matkon, and it goes into the queue.
+- **Units.** As written, metric or US, set once for the account. Cups turn into milliliters and 350°F into 180°C (or the other way), in the steps and the oven line too. Spoons stay spoons, because every kitchen has them, and an amount that already gives both ("3 cups (720ml)") is left alone.
+- **The week.** I put recipes on days, this week and next, and the whole week can go onto the shopping list at once. To move a dinner to another day I hold it and drag it there. When two accounts share a week and a list, it says who I'm sharing it with.
+- **The shopping list.** Ingredients from different recipes are added together where they can be ("1 cup" and "½ cup" of the same thing become "1½ cups"), and I tick things off in the store. It's sorted by aisle (produce, dairy, the pantry…), and if Matkon puts something in the wrong aisle I can move it and it stays moved. It's the same list on every device signed in to the same Matkon account, so whoever's at the store sees it.
+- **Made it, ratings and notes.** The same memory the web app keeps: what I've made and when, how much of it and how it went, a rating out of ten, and a note for next time. If I doubled it last time, there's a button to cook it again the same way. History shows a calendar of everything I've cooked.
+- **Fixing a recipe.** When Claude gets something wrong, or the reel leaves the amounts out, I can fix the recipe right in the app, and "Undo my changes" puts back what Claude wrote.
+- **Asking about it.** I can ask a question about the recipe I'm making ("can I use yogurt instead?") and get an answer with the recipe in front of it.
+- **What can I make?** I keep a list of what's in the kitchen, and it shows the recipes that are missing the least.
+- **Collections, Surprise me and search.** My own groups of recipes, a random pick for tonight from what's up next, and a search that looks in the steps too and forgives a typo.
+- **Printing and sharing.** A recipe, the week or the list prints cleanly (or saves as a PDF), a single recipe can go to anyone as a link, and Settings can download every recipe as one file.
+- **Add from anywhere.** From Instagram, Share → Matkon, and the reel goes into the queue. A recipe page from the browser or photos of a recipe from the gallery work the same way, or I can paste a link or pick photos with the + button.
 - **Offline.** Every recipe and its photo stays on the device, so the kitchen still works when the Wi-Fi doesn't reach. Anything I change offline goes to the server once it's back.
 
 <p align="center"><img src="docs/images/tablet-cook.png" alt="Cook mode on a tablet on its side: the ingredients beside the step"></p>

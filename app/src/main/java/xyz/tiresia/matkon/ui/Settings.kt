@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +23,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +42,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.tiresia.matkon.BuildConfig
 import xyz.tiresia.matkon.data.Kitchen
+import kotlinx.coroutines.launch
 import xyz.tiresia.matkon.data.Net
+import xyz.tiresia.matkon.data.Offline
 
 @Composable
 private fun Group(title: String) {
@@ -85,6 +90,25 @@ fun SettingsScreen() {
         mutableStateOf(Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
     }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed = it }
+    var saving by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val export =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/ld+json")) { uri ->
+            if (uri != null) {
+                saving = "…"
+                scope.launch {
+                    saving =
+                        try {
+                            Kitchen.export(ctx, uri)
+                            "Saved"
+                        } catch (_: Offline) {
+                            "No connection"
+                        } catch (e: Exception) {
+                            e.message ?: "Not saved"
+                        }
+                }
+            }
+        }
 
     Scaffold(
         topBar = { Bar("Settings", onBack = if (nav.stack.size > 1) ({ nav.back() }) else null) },
@@ -103,6 +127,15 @@ fun SettingsScreen() {
                 Item("Calories and protein", onClick = { Kitchen.op("setting", mapOf("key" to "nutrition", "value" to !m.nutrition())) }) {
                     Switch(m.nutrition(), { Kitchen.op("setting", mapOf("key" to "nutrition", "value" to it)) })
                 }
+                Text("Units", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp))
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("" to "As written", "metric" to "Metric", "us" to "US").forEach { (u, name) ->
+                        FilterChip(selected = m.units() == u, onClick = { Kitchen.op("setting", mapOf("key" to "units", "value" to u)) }, label = { Text(name) })
+                    }
+                }
+                Item("History", onClick = { nav.go(Screen.History) })
+                Item("What can I make?", onClick = { nav.go(Screen.Pantry) })
+                Item("Download all recipes", saving, onClick = { export.launch("matkon-recipes.jsonld") })
                 Group("This device")
                 Item("Saved for offline", "$stored")
                 Item("Refresh", if (syncing) "…" else null, onClick = { Kitchen.refresh() })
@@ -130,6 +163,8 @@ fun SettingsScreen() {
                 TextButton(onClick = {
                     leaving = false
                     Kitchen.signOut()
+                    Asks.threads.clear()
+                    langChoice.clear()
                 }) { Text("Sign out") }
             },
             dismissButton = { TextButton(onClick = { leaving = false }) { Text("Cancel") } },

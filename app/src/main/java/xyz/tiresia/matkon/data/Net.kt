@@ -54,6 +54,15 @@ object Net {
             .build()
     }
 
+    /** For the calls that take long: a question to Claude (up to ~90 s), photos going up. */
+    private val slow: OkHttpClient by lazy {
+        client
+            .newBuilder()
+            .readTimeout(150, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .build()
+    }
+
     fun init(ctx: Context) {
         prefs = ctx.getSharedPreferences("matkon", Context.MODE_PRIVATE)
         server = prefs.getString("server", "") ?: ""
@@ -85,18 +94,59 @@ object Net {
     suspend fun post(
         path: String,
         body: Any,
-    ): String = call(Request.Builder().url(url(path)).post(gson.toJson(body).toRequestBody(JSON)).build())
+        long: Boolean = false,
+    ): String = call(Request.Builder().url(url(path)).post(gson.toJson(body).toRequestBody(JSON)).build(), long)
 
-    private suspend fun call(req: Request): String =
+    /** A file from the server (a photo), or null. */
+    suspend fun bytes(path: String): ByteArray? =
+        withContext(Dispatchers.IO) {
+            try {
+                client.newCall(Request.Builder().url(url(path)).build()).execute().use { if (it.isSuccessful) it.body?.bytes() else null }
+            } catch (_: IOException) {
+                null
+            }
+        }
+
+    /** A GET written straight into `out` (the export), without holding it all in memory. */
+    suspend fun download(
+        path: String,
+        out: java.io.OutputStream,
+    ) = withContext(Dispatchers.IO) {
+        val res =
+            try {
+                slow.newCall(Request.Builder().url(url(path)).build()).execute()
+            } catch (e: IOException) {
+                throw Offline(e)
+            }
+        res.use {
+            if (it.code == 401) throw SignedOut()
+            if (!it.isSuccessful) throw Refused(errorOf(it.body?.string().orEmpty()) ?: "Matkon answered ${it.code}", it.code)
+            try {
+                it.body?.byteStream()?.use { input -> input.copyTo(out) }
+            } catch (e: IOException) {
+                throw Offline(e)
+            }
+        }
+    }
+
+    private suspend fun call(
+        req: Request,
+        long: Boolean = false,
+    ): String =
         withContext(Dispatchers.IO) {
             val res =
                 try {
-                    client.newCall(req).execute()
+                    (if (long) slow else client).newCall(req).execute()
                 } catch (e: IOException) {
                     throw Offline(e)
                 }
             res.use {
-                val text = it.body?.string() ?: ""
+                val text =
+                    try {
+                        it.body?.string() ?: ""
+                    } catch (e: IOException) {
+                        throw Offline(e)
+                    }
                 if (it.code == 401) throw SignedOut()
                 if (!it.isSuccessful) throw Refused(errorOf(text) ?: "Matkon answered ${it.code}", it.code)
                 text

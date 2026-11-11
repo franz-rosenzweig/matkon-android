@@ -51,9 +51,17 @@ sealed interface Screen {
 
     data object Settings : Screen
 
+    data object Pantry : Screen
+
+    data object History : Screen
+
     data class Recipe(val code: String) : Screen
 
-    data class Cook(val code: String) : Screen
+    /** Cooking; `start` begins at that step (1 = from the top) instead of where it was left. */
+    data class Cook(val code: String, val start: Int? = null) : Screen
+
+    /** Fixing a recipe, in the language it's shown in. */
+    data class Edit(val code: String, val lang: String) : Screen
 }
 
 private data class Tab(val screen: Screen, val label: String, val icon: ImageVector)
@@ -140,7 +148,7 @@ private fun KitchenFrame() {
     CompositionLocalProvider(LocalNav provides nav) {
         BackHandler(enabled = nav.stack.size > 1) { nav.back() }
         val top = nav.top
-        val full = top is Screen.Cook
+        val full = top is Screen.Cook || top is Screen.Edit
         val wide = wide()
         val tabNow = nav.stack.first()
         Row(Modifier.fillMaxSize()) {
@@ -172,8 +180,11 @@ private fun KitchenFrame() {
                         Screen.Week -> WeekScreen()
                         Screen.Shop -> ShopScreen()
                         Screen.Settings -> SettingsScreen()
+                        Screen.Pantry -> PantryScreen()
+                        Screen.History -> HistoryScreen()
                         is Screen.Recipe -> RecipeScreen(top.code)
-                        is Screen.Cook -> CookScreen(top.code)
+                        is Screen.Cook -> CookScreen(top.code, top.start)
+                        is Screen.Edit -> EditScreen(top.code, top.lang)
                     }
                 }
                 if (!full) {
@@ -195,6 +206,6 @@ private fun KitchenFrame() {
                 }
             }
         }
-        AddReelSheet()
+        AddSheet()
     }
 }

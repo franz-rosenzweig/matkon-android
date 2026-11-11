@@ -1,6 +1,7 @@
 package xyz.tiresia.matkon.data
 
 import android.content.Context
+import android.net.Uri
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import com.google.gson.reflect.TypeToken
@@ -34,8 +35,11 @@ object Kitchen {
     val offline = MutableStateFlow(false)
     val stored = MutableStateFlow(0)
 
-    /** Text another app shared (a reel link), waiting to be added. */
+    /** Text another app shared (a reel or a recipe page's link), waiting to be added; "" opens the Add sheet. */
     val shared = MutableStateFlow<String?>(null)
+
+    /** Photos of a recipe another app shared, waiting to be sent. */
+    val sharedPhotos = MutableStateFlow<List<Uri>?>(null)
 
     /** Amounts ×, per recipe, while the app is open. */
     val factors = MutableStateFlow<Map<String, Double>>(emptyMap())
@@ -236,7 +240,7 @@ object Kitchen {
 
     // ---- changing ----
 
-    private val collapse = setOf("ticks", "step", "note", "rate", "save", "setting")
+    private val collapse = setOf("ticks", "step", "note", "rate", "save", "setting", "pantry", "aisle")
 
     /** One change: made here at once, sent to the server in the background (later, if offline). */
     fun op(
@@ -305,6 +309,130 @@ object Kitchen {
         val r = gson.fromJson(Net.post("api/settings", mapOf("op" to "add-reel", "url" to text)), AddResult::class.java)
         refresh()
         return r
+    }
+
+    private val INSTA = Regex("""(^|\.)(instagram\.com|instagr\.am)/""", RegexOption.IGNORE_CASE)
+
+    /** Any link, as the web's Add does it: an Instagram reel goes to the reel queue, any other page is read
+     * for its recipe. Text with a link in it (what a share sends) works too. */
+    suspend fun addLink(text: String): AddResult {
+        val url = Regex("""https?://\S+""").find(text)?.value ?: text.trim()
+        if (INSTA.containsMatchIn(url.replace(Regex("^https?://", RegexOption.IGNORE_CASE), "")) ||
+            Regex("instagram\\.com|instagr\\.am", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        ) {
+            return addReel(text)
+        }
+        val full = if (Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(url)) url else "https://$url"
+        val r = gson.fromJson(Net.post("api/add-link", mapOf("url" to full)), AddResult::class.java)
+        refresh()
+        return r
+    }
+
+    /** Photos of a recipe (up to four, each down to 2000 px), read into a recipe on the server. */
+    suspend fun addPhotos(
+        ctx: Context,
+        uris: List<Uri>,
+    ): AddResult {
+        val images =
+            kotlinx.coroutines.withContext(Dispatchers.IO) {
+                uris.take(4).map { Photos.jpegDataUrl(ctx, it) }
+            }
+        val r = gson.fromJson(Net.post("api/add-photo", mapOf("images" to images), long = true), AddResult::class.java)
+        refresh()
+        return r
+    }
+
+    /** A fix of the recipe (or {revert: true}), kept on the server. Its answer is the recipe as it is now, kept
+     * on the phone with its other language and the list. */
+    suspend fun saveEdit(
+        code: String,
+        lang: String,
+        body: Map<String, Any?>,
+    ): Recipe {
+        val text =
+            try {
+                Net.post("api/r/$code/edit", body + ("lang" to lang))
+            } catch (e: SignedOut) {
+                lapsed()
+                throw e
+            }
+        val r = gson.fromJson(text, Recipe::class.java)
+        File(dir, "r_${code}_$lang.json").writeText(text)
+        for (l in r.langs.orEmpty()) {
+            if (l != lang) {
+                try {
+                    fetchRecipe(code, l)
+                } catch (_: Exception) {
+                }
+            }
+        }
+        refresh()
+        return r
+    }
+
+    /** A question about a recipe, answered by Claude on the server. */
+    suspend fun ask(
+        code: String,
+        lang: String?,
+        question: String,
+        history: List<Pair<String, String>>,
+    ): String {
+        val body =
+            mapOf(
+                "code" to code,
+                "lang" to lang,
+                "question" to question,
+                "history" to history.takeLast(6).map { mapOf("q" to it.first, "a" to it.second) },
+            )
+        val text =
+            try {
+                Net.post("api/ask", body, long = true)
+            } catch (e: SignedOut) {
+                lapsed()
+                throw e
+            }
+        return gson.fromJson(text, AskResponse::class.java).answer.orEmpty()
+    }
+
+    /** A link anyone can open (on) or none (off). The phone's copies of the recipe are fetched again. */
+    suspend fun share(
+        code: String,
+        on: Boolean,
+    ): String? {
+        val r = gson.fromJson(Net.post("api/settings", mapOf("op" to if (on) "share" else "unshare", "code" to code)), ShareResponse::class.java)
+        scope.launch {
+            for (l in listOf("en", "he")) {
+                if (File(dir, "r_${code}_$l.json").exists()) {
+                    try {
+                        fetchRecipe(code, l)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        return if (on) r.url else null
+    }
+
+    /** Every recipe as one .jsonld file, written where the person picked. */
+    suspend fun export(
+        ctx: Context,
+        uri: Uri,
+    ) {
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val out = ctx.contentResolver.openOutputStream(uri, "wt") ?: throw java.io.IOException("Can't write there")
+            out.use { Net.download("api/export", it) }
+        }
+    }
+
+    /** A recipe for tonight: from Up next, nothing made in the last five days (else from the whole kitchen). */
+    fun surprise(): String? {
+        val now = System.currentTimeMillis() / 1000.0
+        val last = memory.value.cooked_last.orEmpty()
+        val recent = { c: String -> (last[c] ?: 0.0) > now - 5 * 86400 }
+        val codes = recipes.value.filter { it.is_recipe != false }.map { it.code }.toSet()
+        var pool = suggest.value.map { it.code }.filter { it in codes && !recent(it) }
+        if (pool.isEmpty()) pool = codes.filter { !recent(it) }
+        return pool.randomOrNull()
     }
 
     /** A recipe's ingredients onto the shopping list, at the amounts shown. */

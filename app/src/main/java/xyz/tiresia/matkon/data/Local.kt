@@ -27,11 +27,12 @@ object Local {
             "cooked" ->
                 counted(
                     m.copy(
-                        cooked = m.cooked.orEmpty() + Cooked(a["id"] as String, code!!, now()),
+                        cooked = m.cooked.orEmpty() + Cooked(a["id"] as String, code!!, now(), (a["factor"] as Number?)?.toDouble(), note(a["note"])),
                         steps = m.steps.orEmpty() - code,
                         ticks = m.ticks.orEmpty() - code,
                     ),
                 )
+            "cook-note" -> m.copy(cooked = m.cooked.orEmpty().map { if (it.id == a["id"]) it.copy(note = note(a["note"])) else it })
             "uncook" -> counted(m.copy(cooked = m.cooked.orEmpty().filter { it.id != a["id"] }))
             "note" -> {
                 val t = (a["text"] as String?).orEmpty()
@@ -41,7 +42,38 @@ object Local {
                 val r = (a["rating"] as Number?)?.toInt() ?: 0
                 m.copy(ratings = if (r == 0) m.ratings.orEmpty() - code!! else m.ratings.orEmpty() + (code!! to r))
             }
-            "setting" -> m.copy(settings = m.settings.orEmpty() + ((a["key"] as String) to (a["value"] == true)))
+            "setting" -> {
+                val key = a["key"] as String
+                val value: Any = if (key == "units") (a["value"] as? String).orEmpty() else a["value"] == true
+                m.copy(settings = m.settings.orEmpty() + (key to value))
+            }
+            "coll-new" -> {
+                val id = a["id"] as String
+                if (m.collections.orEmpty().any { it.id == id }) m else m.copy(collections = m.collections.orEmpty() + Coll(id, name(a["name"]), emptyList()))
+            }
+            "coll-rename" -> m.copy(collections = m.collections.orEmpty().map { if (it.id == a["id"]) it.copy(name = name(a["name"])) else it })
+            "coll-delete" -> m.copy(collections = m.collections.orEmpty().filter { it.id != a["id"] })
+            "coll-add" ->
+                m.copy(
+                    collections =
+                        m.collections.orEmpty().map {
+                            if (it.id == a["id"] && code!! !in it.codes.orEmpty()) it.copy(codes = it.codes.orEmpty() + code) else it
+                        },
+                )
+            "coll-remove" -> m.copy(collections = m.collections.orEmpty().map { if (it.id == a["id"]) it.copy(codes = it.codes.orEmpty() - code.orEmpty()) else it })
+            "pantry" -> {
+                val seen = HashSet<String>()
+                val items =
+                    (a["items"] as List<*>)
+                        .map { it?.toString().orEmpty().trim().take(60).trim() }
+                        .filter { it.isNotEmpty() && seen.add(it.lowercase()) }
+                m.copy(pantry = items.take(400))
+            }
+            "aisle" -> {
+                val key = a["key"] as String
+                val aisle = (a["aisle"] as String?).orEmpty()
+                m.copy(aisles = (m.aisles.orEmpty() - key) + (if (aisle.isEmpty()) emptyMap() else mapOf(key to aisle)))
+            }
             "plan-add" ->
                 m.copy(
                     plan =
@@ -71,6 +103,10 @@ object Local {
             else -> m
         }
     }
+
+    private fun note(v: Any?) = (v as? String)?.trim()?.take(500)?.takeIf { it.isNotEmpty() }
+
+    private fun name(v: Any?) = (v as? String)?.trim()?.take(60)?.trim().orEmpty()
 
     private fun counted(m: Memory): Memory {
         val count = mutableMapOf<String, Int>()
